@@ -1,0 +1,14 @@
+:root {
+  --buttonBgColor: #ff3e00;
+  --buttonTextColor: #fff;
+}
+
+body {
+  background-color: var(--backgroundColor);
+  color: var(--textColor);
+  font-family: 'Poppins', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}

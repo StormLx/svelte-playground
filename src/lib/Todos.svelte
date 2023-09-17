@@ -1,0 +1,141 @@
+<script lang="ts">
+    import '../app.scss';
+    import TodoList from '$lib/todos/TodoList.svelte';
+    import {v4 as uuid} from 'uuid';
+    import {tick, onMount} from 'svelte';
+    import {fly} from 'svelte/transition';
+    import type {Todo} from "$lib/todos/todo.model";
+    import spin from "$lib/transitions/spin";
+    import fade from "$lib/transitions/fade";
+
+
+    let todoList: any;
+    let showList = true;
+
+    let todos: Todo[] | null | undefined = null;
+    let error: string | null = null;
+    let isLoading = false;
+    let isAdding = false;
+    let disabledItems: string[] = [];
+
+    onMount(() => {
+        loadTodos();
+    });
+
+    async function loadTodos() {
+        isLoading = true;
+        await fetch('https://jsonplaceholder.typicode.com/todos?_limit=10').then(async (response) => {
+            if (response.ok) {
+                todos = await response.json();
+            } else {
+                error = 'An error has occurred';
+            }
+        });
+        isLoading = false;
+    }
+
+    async function handleAddTodo(event: CustomEvent) {
+        event.preventDefault();
+        isAdding = true;
+        await fetch('https://jsonplaceholder.typicode.com/todos', {
+            method: 'POST',
+            body: JSON.stringify({
+                title: event.detail.title,
+                completed: false
+            }),
+            headers: {
+                'Content-type': 'application/json; charset=UTF-8'
+            }
+        }).then(async (response) => {
+            if (response.ok) {
+                const todo: Todo = await response.json();
+                const prevTodos = todos ?? [];
+                todos = [{...todo, id: uuid()}, ...prevTodos];
+                todoList.clearInput();
+            } else {
+                alert('An error has occurred.');
+            }
+        });
+        isAdding = false;
+        await tick();
+        todoList.focusInput();
+    }
+
+    async function handleRemoveTodo(event: CustomEvent) {
+        const id = event.detail.id;
+        if (disabledItems.includes(id)) return;
+        disabledItems = [...disabledItems, id];
+        await fetch(`https://jsonplaceholder.typicode.com/todos/${id}`, {
+            method: 'DELETE'
+        }).then((response) => {
+            if (response.ok) {
+                todos = todos?.filter((t: Todo) => t.id !== event.detail.id);
+            } else {
+                alert('An error has occurred.');
+            }
+        });
+        disabledItems = disabledItems.filter((itemId) => itemId !== id);
+    }
+
+    async function handleToggleTodo(event: CustomEvent) {
+        const id = event.detail.id;
+        const value = event.detail.value;
+        if (disabledItems.includes(id)) return;
+        disabledItems = [...disabledItems, id];
+        await fetch(`https://jsonplaceholder.typicode.com/todos/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+                completed: value
+            }),
+            headers: {
+                'Content-type': 'application/json; charset=UTF-8'
+            }
+        }).then(async (response) => {
+            if (response.ok) {
+                const updatedTodo = await response.json();
+                todos = todos?.map((todo) => {
+                    if (todo.id === id) {
+                        return updatedTodo;
+                    }
+                    return {...todo};
+                });
+            } else {
+                alert('An error has occurred.');
+            }
+        });
+
+        disabledItems = disabledItems.filter((itemId) => itemId !== id);
+    }
+</script>
+
+<label>
+    <input type="checkbox" bind:checked={showList}/>
+    Show/Hide list
+</label>
+{#if showList}
+    <div
+            out:fade in:spin={{duration: 4000, spin: 100}}
+            style:max-width="600px">
+        <TodoList
+                {todos}
+                {error}
+                {isLoading}
+                {disabledItems}
+                disableAdding={isAdding}
+                scrollOnAdd="top"
+                bind:this={todoList}
+                on:addtodo={handleAddTodo}
+                on:removetodo={handleRemoveTodo}
+                on:toggletodo={handleToggleTodo}
+        />
+    </div>
+    {#if todos}
+        <p>
+            Number of todos:
+            {#key todos.length}<span
+                    style:display="inline-block"
+                    in:fly|local={{ y: -10 }}>{todos.length}</span
+            >{/key}
+        </p>
+    {/if}
+{/if}
